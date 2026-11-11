@@ -59,6 +59,18 @@ def check_runtime(project_root: Path) -> str | None:
     problems = pm.activate()
     if not problems:
         return None
+
+    # A Nix package composes its toolchain at build time (runtimeDeps in
+    # nix/hermes-agent.nix): the pinned node/npm/ffmpeg are store paths on the
+    # wrapper's PATH, never pm-published entries. pm's staged verification
+    # additionally refuses every glibc-linked artifact on a NixOS host (the
+    # --version probe needs nix-ld), so `hermes pm install` cannot close this
+    # drift here at all — rebuilding the artifact would not either. The
+    # verdict is structural on this distribution, not a debt; activate()
+    # above still ran, so the store's tools keep their PATH precedence.
+    if read_install_stamp(project_root).get("distribution") == "nix":
+        return None
+
     steward = sealed_steward(Path(project_root))
     remedy = (f"this {steward}-managed install must rebuild the artifact to fix"
               if steward else "run `hermes pm install`")
